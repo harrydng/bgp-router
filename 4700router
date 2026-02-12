@@ -27,6 +27,10 @@ class Router:
 
     def send(self, network, message):
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
+    
+    #we will use this as a helper function to determine what to do with the message we receive
+    def determine_router_action(self,msg,srcif):
+        return
 
     def run(self):
         while True:
