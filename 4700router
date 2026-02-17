@@ -60,7 +60,7 @@ class Router:
                 msg = k.decode('utf-8')
                 jsonObject = json.loads(msg)
                 #print("Received object:",jsonObject)
-                print(self.determine_action(jsonObject))
+                print(self.determine_action(conn, jsonObject))
 
                 #print("Received message '%s' from %s" % (msg, srcif))
         return
