@@ -1,14 +1,14 @@
-def handshake():
+def handshake(socket, jsonObject):
     pass
 
-def update():
+def update(socket, jsonObject):
     pass
 
-def withdraw():
+def withdraw(socket, jsonObject):
     pass
 
-def data():
+def data(socket, jsonObject):
     pass
 
-def dump():
+def dump(socket, jsonObject):
     pass

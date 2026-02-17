@@ -28,21 +28,21 @@ class Router:
     def send(self, network, message):
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
     
-    def determine_action(self, jsonObject):
+    def determine_action(self, socket, jsonObject):
         if jsonObject["type"] == "handshake":
-            handshake()
+            handshake(socket, jsonObject)
             return "handshake"
         elif jsonObject["type"] == "update":
-            update()
+            update(socket, jsonObject)
             return "update"
         elif jsonObject["type"] == "withdraw":
-            withdraw()
+            withdraw(socket, jsonObject)
             return "withdraw"
         elif jsonObject["type"] == "data":
-            data()
+            data(socket, jsonObject)
             return "data"
         elif jsonObject["type"] == "dump":
-            dump()
+            dump(socket, jsonObject)
             return "dump"
         else:
             return "unknown"
