@@ -39,8 +39,10 @@ class Router:
                         srcif = sock
                         break
                 msg = k.decode('utf-8')
+                jsonObject = json.loads(msg)
+                print("Received object:",jsonObject)
 
-                print("Received message '%s' from %s" % (msg, srcif))
+                #print("Received message '%s' from %s" % (msg, srcif))
         return
 
 if __name__ == "__main__":

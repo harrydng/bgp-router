@@ -28,9 +28,24 @@ class Router:
     def send(self, network, message):
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
     
-    #we will use this as a helper function to determine what to do with the message we receive
-    def determine_router_action(self,msg,srcif):
-        return
+    def determine_action(self, jsonObject):
+        if jsonObject["type"] == "handshake":
+            handshake()
+            return "handshake"
+        elif jsonObject["type"] == "update":
+            update()
+            return "update"
+        elif jsonObject["type"] == "withdraw":
+            withdraw()
+            return "withdraw"
+        elif jsonObject["type"] == "data":
+            data()
+            return "data"
+        elif jsonObject["type"] == "dump":
+            dump()
+            return "dump"
+        else:
+            return "unknown"
 
     def run(self):
         while True:
@@ -43,8 +58,11 @@ class Router:
                         srcif = sock
                         break
                 msg = k.decode('utf-8')
+                jsonObject = json.loads(msg)
+                #print("Received object:",jsonObject)
+                print(self.determine_action(jsonObject))
 
-                print("Received message '%s' from %s" % (msg, srcif))
+                #print("Received message '%s' from %s" % (msg, srcif))
         return
 
 if __name__ == "__main__":
