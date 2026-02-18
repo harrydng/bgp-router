@@ -7,6 +7,7 @@ class Router:
     relations = {}
     sockets = {}
     ports = {}
+    routeTable = {}
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
@@ -31,9 +32,9 @@ class Router:
     def determine_action(self, socket, jsonObject):
         if jsonObject["type"] == "handshake":
             handshake(socket, jsonObject)
-            return "handshake"
+            return jsonObject
         elif jsonObject["type"] == "update":
-            update(socket, jsonObject)
+            self.routeTable = update(socket, jsonObject, routeTable=self.routeTable)
             return "update"
         elif jsonObject["type"] == "withdraw":
             withdraw(socket, jsonObject)
