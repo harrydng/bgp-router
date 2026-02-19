@@ -2,6 +2,7 @@
 
 import argparse, socket, time, json, select, struct, sys, math
 from RIB import *
+
 class Router:
 
     relations = {}
