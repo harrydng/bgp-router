@@ -26,27 +26,27 @@ def withdraw(socket, jsonObject):
     pass
 
 
+# data
 def ip_to_int(ip):
-    quads = [int(qdn) for qdn in ip.split('.')]
-    return (quads[0] << 24) + (quads[1] << 16) + (quads[2] << 8) + quads[3]
+    a,b,c,d = [int(x) for x in ip.split(".")]
+    return (a<<24) | (b<<16) | (c<<8) | d
+
+def int_to_ip(n):
+    return ".".join(str((n >> shift) & 255) for shift in (24,16,8,0))
+
+def mask_to_prefix(netmask):
+    return bin(ip_to_int(netmask)).count("1")
+
+def prefix_to_mask(prefix):
+    mask = (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF if prefix > 0 else 0
+    return int_to_ip(mask)
 
 def data(self, socket, jsonObject):
     """
     Forwards data packets to the next hop, based on the routing table. 
     If no route is found, the packet is dropped.
     """
-    destination_ip = ip_to_int(jsonObject["msg"]["dst"])
-    
-    
-    #find matches routes
-    matches = []
-    for route in self.routeTable:
-        network, prefixlen = route.split("/")
-        prefixlen = int(prefixlen)
-        netmask = ".".join(str((0xffffffff << (32 - prefixlen) >> i) & 0xff) for i in [24, 16, 8, 0])
-        if ip_in_network(jsonObject["msg"]["dst"], network, netmask):
-            matches.append((route, self.routeTable[route]))
-    
+    pass
 
 # dump
 def get_active_routes(self):
@@ -62,7 +62,73 @@ def aggregate_routes(self, routes):
     This is done by combining routes that share a common prefix 
     into a single route with a shorter prefix.
     """
-    return routes
+    def key(route):
+        return(
+            route["peer"],
+            route["localpref"],
+            route["selfOrigin"],
+            route["origin"],
+            tuple(route["ASPath"]),
+            mask_to_prefix(route["netmask"])
+        )
+    
+    #grouping routes from their mergable attributed and prefix length
+    groups = {}
+    for route in routes:
+        groups.setdefault(key(route), []).append(route)
+        
+    aggregate_routes = []
+    
+    for k, grp in groups.items():
+        prefix_len = k[-1]
+        block = 1 << (32 - prefix_len)
+        
+        # sort based on numeric network address
+        group_sorted = sorted(grp, key=lambda r: ip_to_int(r["network"]))
+        
+        changed = True
+        while changed:
+            changed = False
+            new_list = []
+            i = 0
+            while i < len(group_sorted):
+                if i + 1 < len(group_sorted):
+                    a = group_sorted[i]
+                    b = group_sorted[i + 1]
+                    
+                    na = ip_to_int(a["network"])
+                    nb = ip_to_int(b["network"])
+                    
+                    low = min(na, nb)
+                    high = max(na, nb)
+                    
+                    #check adjacent block?
+                    adjacent = (high - low) == block
+                    #aligned for supernet?
+                    aligned = (low % (2 * block)) == 0
+                    
+                    if adjacent and aligned and prefix_len > 0:
+                        #merge into supernet
+                        new_prefix = prefix_len - 1
+                        merged = dict(a)
+                        merged["network"] = int_to_ip(low)
+                        merged["netmask"] = prefix_to_mask(new_prefix)
+                        new_list.append(merged)
+                        
+                        changed = True
+                        i += 2
+                        continue
+                    #no merge
+                    new_list.append(group_sorted[i])
+                    i+=1
+                    
+                group_sorted = sorted(new_list, key=lambda r: ip_to_int(r["network"]))
+                
+        aggregate_routes.extend(group_sorted)
+    
+    #sort again     
+    aggregate_routes.sort(key=lambda r: (ip_to_int(r["network"]), mask_to_prefix(r["netmask"])))
+    return aggregate_routes
 
 def get_our_ip_from_socket(self, socket):
     """
@@ -93,13 +159,14 @@ def dump(self, socket, jsonObject):
     for route in routes:
         table_list.append({
             "network": route["network"],
-            "netmask": route.netmask,
-            "peer": route.peer,
-            "localpref": route.localpref,
-            "ASPath": route.ASPath,
-            "selfOrigin": route.selfOrigin,
-            "origin": route.origin,
+            "netmask": route["netmask"],
+            "peer": route["peer"],
+            "localpref": route["localpref"],
+            "ASPath": route["ASPath"],
+            "selfOrigin": route["selfOrigin"],
+            "origin": route["origin"],
         })
+
         
     response = {
         "src": self.get_our_ip_from_socket(socket),
