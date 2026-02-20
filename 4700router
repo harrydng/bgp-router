@@ -9,6 +9,7 @@ class Router:
     sockets = {}
     ports = {}
     routeTable = {}
+    RIBTable = {}
 
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
@@ -35,7 +36,7 @@ class Router:
             handshake(socket, jsonObject)
             return jsonObject
         elif jsonObject["type"] == "update":
-            self.routeTable = update(socket, jsonObject, routeTable=self.routeTable)
+            self.routeTable = update(self, jsonObject)
             return "update"
         elif jsonObject["type"] == "withdraw":
             withdraw(socket, jsonObject)

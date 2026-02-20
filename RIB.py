@@ -1,5 +1,14 @@
+from enum import Enum
+
+class Origin(Enum):
+    UNK = 0
+    EGP = 1
+    IGP = 2
 import json
 
+def ip_to_int(ip):
+    a,b,c,d = [int(x) for x in ip.split(".")]
+    return (a<<24) | (b<<16) | (c<<8) | d
 
 def handshake(socket, jsonObject):
     pass
@@ -9,13 +18,86 @@ def netmask_to_prefixlen(netmask):
     mask_int = (quads[0] << 24) + (quads[1] << 16) + (quads[2] << 8) + quads[3]
     return bin(mask_int).count('1')
 
-def update(socket, jsonObject, routeTable):
+def challenge_route(route1,route2):
+    route1 = json.loads(route1)
+    route2 = json.loads(route2)
+    if route1["localpref"] > route2["localpref"]:
+        return route1
+    elif route1["selfOrigin"] and not route2["selfOrigin"]:
+        return route1
+    elif len(route1["ASPath"]) < len(route2["ASPath"]):
+        return route1
+    elif Origin[route1["origin"]] < Origin[route2["origin"]]:
+        return route1
+    elif ip_to_int(route1["src"]) < ip_to_int(route2["src"]):
+        return route1
+    else:
+        return route2
+
+def update(router, jsonObject):
+    #Router object passes itself into update function so that we can access and modify the routeTable
     network = jsonObject["msg"]["network"]
     netmask = jsonObject["msg"]["netmask"]
     ASPath = jsonObject["msg"]["ASPath"]
+    announcement_info = {
+        "src": jsonObject["src"],
+        "dst": jsonObject["dst"],
+        "localpref": jsonObject["msg"]["localpref"],
+        "ASPath": ASPath,
+        "selfOrigin": jsonObject["msg"]["selfOrigin"],
+        "origin": jsonObject["msg"]["origin"],
+    }
+    new_key =  network + "/" + str(prefixlen)
     prefixlen = netmask_to_prefixlen(netmask)
-    routeTable[network + "/" + str(prefixlen)] = jsonObject["msg"]
-    return routeTable
+    
+
+
+    #add entry to the routetable and the RIB table if it doesn't exist
+    if new_key in router.routeTable:
+        old_route_info = router.routeTable[new_key]
+        if challenge_route(json.dumps(old_route_info), json.dumps(announcement_info)) == old_route_info:
+            pass
+        else:
+            router.routeTable[new_key] = announcement_info
+    else:
+        router.routeTable[new_key] = announcement_info
+    
+    #add entry to the RIB table, which stores all received routes for a network prefix.
+    if new_key in router.RIBTable:
+        router.RIBTable[new_key].add(json.dumps(announcement_info,sort_keys=True))
+    else:
+        router.RIBTable[new_key] = set([json.dumps(announcement_info,sort_keys=True)])
+    
+    #after we store info into routeTable we announce it to valid neighbors
+    src_router_relation = router.relations[jsonObject["src"]]
+    if src_router_relation == "peer" or src_router_relation == "provider":
+        for neighbor, relation in router.relations.items():
+            if relation == "customer":
+                socket = router.sockets[neighbor]
+                socket.send(json.dumps({
+                    "type": "update",
+                    "src": router.our_addr(neighbor),
+                    "dst": neighbor,
+                    "msg": {
+                        "network": network,
+                        "netmask": netmask,
+                        "ASPath": [router.asn] + announcement_info["ASPath"]
+                    }
+                }),(neighbor, router.ports[neighbor]))
+    elif src_router_relation == "customer":
+        for neighbor, relation in router.relations.items():
+            if neighbor != '.'.join(jsonObject["src"].split('.')[:3]):
+                socket = router.sockets[neighbor]
+                socket.send(json.dumps({
+                    "type": "update",
+                    "src": router.our_addr(neighbor),
+                    "dst": neighbor,
+                    "msg": {
+                        "network": network,
+                        "netmask": netmask,
+                        "ASPath": [router.asn] + announcement_info["ASPath"]
+                    }
+                }),(neighbor, router.ports[neighbor]))
 
 
 def withdraw(socket, jsonObject):
@@ -27,9 +109,7 @@ def withdraw(socket, jsonObject):
 
 
 # data
-def ip_to_int(ip):
-    a,b,c,d = [int(x) for x in ip.split(".")]
-    return (a<<24) | (b<<16) | (c<<8) | d
+
 
 def int_to_ip(n):
     return ".".join(str((n >> shift) & 255) for shift in (24,16,8,0))
